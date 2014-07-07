@@ -23,11 +23,12 @@ public class Main {
             try {
                 Runtime rt = Runtime.getRuntime();
                 p = rt.exec("../phantomjs-1.9.7-macosx/bin/phantomjs ../phantomjs-1.9.7-macosx/dom.js 2000 " + url);
+                //Thread.sleep(20000);
                 //p.waitFor();
                 BufferedReader stdOut = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 String s;
                 while ((s = stdOut.readLine()) != null) {
-                    /*if(s.contains("\"actual_url\""))
+                    if(s.contains("\"actual_url\""))
                     {
                         //System.out.println(s);
                         int index = s.indexOf(": \"")+3;
@@ -39,7 +40,7 @@ public class Main {
                             url = actualURL;
                             break;
                         }
-                    }*/
+                    }
                     if (s.contains("\"xhtml\": ")) {
                         content = s;
                         repeat=false;
@@ -57,8 +58,10 @@ public class Main {
 		return content;
 	}
 	
-	public static void parseAdobeLinks(String info)
+	public static void parseAdobeLinks(String link)
 	{
+        String info = gettingHTMLSOURCE(link);
+
 		int refstart = 0;
 		ArrayList<String> postsURL=new ArrayList<String>();
 		while (info.indexOf("href=\\\"", refstart)!=-1)
@@ -69,10 +72,11 @@ public class Main {
 				postsURL.add(ref);
 			refstart=info.indexOf("\\\"", refstart);
 		}
+
 		for(int i=0;i<postsURL.size();i++)
 		{
+            System.out.println(i+" "+postsURL.get(i));
 			parseAdobe(postsURL.get(i));
-			System.out.println(postsURL.get(i));
 		}
 	}
 
@@ -88,7 +92,7 @@ public class Main {
 	        is = url.openStream();  // throws an IOException
 	        br = new BufferedReader(new InputStreamReader(is));
 	        
-	        File output = new File("output.csv");
+	        File output = new File("output-adobe.csv");
 	        boolean existBefore = true;
 			if (!output.exists()) {
 				existBefore = false;
@@ -306,9 +310,10 @@ public class Main {
 	    }
 	}
 
-    public static void parseGoogleLinks(String link)
+    public static void parseGoogleLinks(String link) throws InterruptedException
     {
         String source = gettingHTMLSOURCE(link);
+        System.out.print("");
 
         int tmp=0;
         ArrayList<String> postsURL=new ArrayList<String>();
@@ -326,14 +331,13 @@ public class Main {
             String num = source.substring(source.indexOf(">", tmp) + 1, source.indexOf(" post", tmp));
             numPosts.add(num);
 
-            System.out.println(url+" "+num);
             counter++;
         }
 
         for(int i=0;i<postsURL.size();i++)
         {
-            System.out.println("https://productforums.google.com/forum/"+postsURL.get(i)+"%5B1-"+numPosts.get(i)+"-false%5D");
-            //parseGoogle("https://productforums.google.com/forum/"+postsURL.get(i)+"%5B1-"+numPosts.get(i)+"-false%5D");
+            //System.out.println("https://productforums.google.com/forum/"+postsURL.get(i)+"%5B1-"+numPosts.get(i)+"-false%5D");
+            parseGoogle("https://productforums.google.com/forum/"+postsURL.get(i));
         }
 
         System.out.println(counter);
@@ -342,48 +346,132 @@ public class Main {
     public static void parseGoogle(String link) throws InterruptedException
     {
         String source = gettingHTMLSOURCE(link);
+        //System.out.println(source);
         boolean question = true;
-        Thread.sleep(10000);
-        System.out.println(source);
+
+        System.out.print("");
+        System.out.print("");
 
         try{
             File output = new File("output-google.csv");
+            boolean existBefore = true;
+            if (!output.exists()) {
+                existBefore = false;
+            }
+
             FileWriter fw = new FileWriter(output.getAbsoluteFile(),true);
             BufferedWriter bw = new BufferedWriter(fw);
+            if(!existBefore)
+            {
+                bw.append("URL, Question Title, Time Stamp, Initial Question, Responses");
+                bw.append("\n");
+            }
+
+            bw.append(link+",");
 
             int tmp=0;
+            String allLinks="";
 
             while(true) {
+                String curReplyLinks ="";
                 //find topic
                 if(question) {
                     tmp = source.indexOf("<span class=\\\"GFO--0QHCC\\\"", tmp);
                     String topic = source.substring(source.indexOf(">", tmp) + 1, source.indexOf("</span>", tmp));
-                    System.out.println("topic: " + topic);
-                    question = false;
+                    //System.out.println("topic: " + topic);
+                    topic=topic.replaceAll("\"","");
+                    bw.append("\""+topic+"\",");
                 }
 
                 //find author
-                tmp = source.indexOf("class=\\\"GFO--0QCVB\\\"", tmp);
+                tmp = source.indexOf("class=\\\"GFO--0QCVB", tmp);
                 if(tmp==-1)
                     break;
                 String author = source.substring(source.indexOf(">", tmp) + 1, source.indexOf("</span>", tmp));
-                System.out.println("author: " + author);
+                //System.out.println("author: " + author);
 
                 //find date
                 tmp = source.indexOf("class=\\\"GFO--0QJFB", tmp);
                 tmp = source.indexOf("title=\\\"", tmp);
                 String date = source.substring(tmp + 8, source.indexOf("\\\"", tmp+8));
-                System.out.println("date: " + date);
+                //System.out.println("date: " + date);
+
+                if(question)
+                {
+                    bw.append("\""+author+"\n"+date+"\",");
+                    question = false;
+                }
 
                 //find question
-                tmp = source.indexOf("class=\\\"GFO--0QIFB\\\"", tmp);
-                tmp = source.indexOf("<div dir=\\\"ltr\\\"", tmp);
+                tmp = source.indexOf("class=\\\"GFO--0QIFB", tmp);
+                //tmp = source.indexOf("<div dir=\\\"ltr\\\"", tmp);
                 String content = source.substring(source.indexOf(">", tmp) + 1, source.indexOf("<a class=\\\"gwt-Anchor\\\"", tmp));
-                content = content.replaceAll("<.*?>", "");
-                System.out.println("content: " + content);
+                tmp=source.indexOf("<a class=\\\"gwt-Anchor\\\"", tmp);
 
-                System.out.println();
+                int tmpHref = 0;
+                while( true )
+                {
+                    tmpHref = content.indexOf("href=\\\"",tmpHref)+7;
+                    if(tmpHref < 7)
+                        break;
+
+                    int endOfLink = content.indexOf("\\\"",tmpHref);
+                    String curlink = content.substring(tmpHref,endOfLink);
+                    curReplyLinks = curReplyLinks+" "+curlink;
+                    tmpHref = endOfLink;
+                }
+
+                int tmpVideo = 0;
+                while( true )
+                {
+                    tmpVideo = content.indexOf("<iframe",tmpVideo);
+                    if(tmpVideo < 0)
+                        break;
+
+                    throw new IOException("Video Found but does not handle yet");
+                }
+
+                //find attachments
+                String attachments = "";
+                int tmpAttach = tmp;
+                tmpAttach = source.indexOf("<div class=\\\"GFO--0QNDB",tmpAttach)+4;
+                //System.out.println(tmpAttach);
+                int nextReplyIndex = source.indexOf("class=\\\"GFO--0QCVB", tmp);
+                if(nextReplyIndex==-1)
+                    nextReplyIndex = source.indexOf("<div class=\\\"GFO--0QHAC",tmp);
+                if(tmpAttach>=4 && tmpAttach<nextReplyIndex)
+                {
+                    String prev = "";
+                    while(source.indexOf("href=\\\"",tmpAttach)<nextReplyIndex)
+                    {
+                        tmpAttach = source.indexOf("href=\\\"",tmpAttach)+7;
+                        if(tmpAttach<7)
+                            break;
+
+                        String curAttach = source.substring(tmpAttach,source.indexOf("\\\"",tmpAttach));
+
+                        if(prev.compareTo(curAttach)!=0)
+                            attachments = attachments+" "+source.substring(tmpAttach,source.indexOf("\\\"",tmpAttach));
+
+                        prev = curAttach;
+                    }
+                }
+
+                content=content.replaceAll("\"","");
+                content = content.replaceAll("<.*?>", "");
+                content=content.replaceAll("&.*?;","");
+                content=content+curReplyLinks+" ["+attachments+"]";
+                //System.out.println("content: " + content);
+                bw.write("\"[" + author + ", " + date + "]\n" + content + "\",");
+
+                allLinks = allLinks+curReplyLinks+attachments;
+
+                //System.out.println();
             }
+            bw.write("\""+allLinks+"\",");
+            bw.append("\n");
+            bw.flush();
+            bw.close();
         } catch (MalformedURLException mue) {
             mue.printStackTrace();
         } catch (IOException ioe) {
@@ -391,9 +479,9 @@ public class Main {
         }
     }
 
-    public static void parseAutoDeskLinks(String link)
+    public static void parseAutoDeskLinks()
     {
-        String info = gettingHTMLSOURCE(link);
+        /*String info = gettingHTMLSOURCE(link);
         System.out.println(info);
 
         int refstart = 0;
@@ -408,10 +496,29 @@ public class Main {
                 postsURL.add(ref);
             refstart=info.indexOf("\\\"", refstart);
             indicator = refstart;
+        }*/
+
+        ArrayList<String> postsURL=new ArrayList<String>();
+
+        try {
+            File file = new File("input_autodesk.txt");
+            BufferedReader br = new BufferedReader(new FileReader(file));
+            String line;
+            while ((line = br.readLine()) != null) {
+                postsURL.add(line);
+            }
+            br.close();
         }
+        catch (IOException e)
+        {
+            e.printStackTrace();
+            return;
+        }
+
         for(int i=0;i<postsURL.size();i++)
         {
-            System.out.println(postsURL.get(i));
+            System.out.println(i+" "+postsURL.get(i));
+            parseAutoDesk(postsURL.get(i));
         }
     }
 
@@ -441,21 +548,23 @@ public class Main {
             int tmp=0;
 
             while(true) {
-                //find topic
-                if(question) {
-                    tmp = source.indexOf("<div class=\\\"first-message", tmp);
-                    String topic = source.substring(source.indexOf("<h1>", tmp) + 3, source.indexOf("</h1>", tmp));
-                    topic = topic.substring(topic.lastIndexOf(">")+1);
-                    topic=topic.replaceAll("\"","");
-                    bw.append("\""+topic+"\",");
-                }
-
                 //find author
                 tmp = source.indexOf("<span class=\\\"UserName lia-user-name",tmp);
                 if(tmp==-1)
                     break;
-                tmp = source.indexOf("<span class",tmp+22);
+                tmp = source.indexOf("<span class",tmp+4);
                 String author = source.substring(source.indexOf(">",tmp)+1, source.indexOf("</span",tmp));
+                author=author.replaceAll("<.*?>", "");
+
+                //find topic
+                if(question) {
+                    tmp = source.indexOf("<div class=\\\"first-message", tmp);
+                    tmp = source.indexOf("<div class=\\\"lia-message-subject",tmp);
+                    String topic = source.substring(source.indexOf("<h1", tmp), source.indexOf("</h1>", tmp));
+                    topic=topic.replaceAll("<.*?>", "");
+                    topic=topic.replaceAll("\"","");
+                    bw.append("\""+topic+"\",");
+                }
 
                 //find time
                 tmp = source.indexOf("<div class=\\\"autodesk-reply-time",tmp);
@@ -471,7 +580,16 @@ public class Main {
 
                 //find content
                 tmp = source.indexOf("<div class=\\\"lia-message-body-content",tmp)+10;
-                String content = source.substring(source.indexOf(">",tmp)+1,source.indexOf("</div>",tmp));
+                int contentEnd=source.indexOf("</div>",tmp);
+                String content = source.substring(source.indexOf(">",tmp)+1,contentEnd);
+                while(content.indexOf("<div class=\\\"username_area")>0)
+                {
+                    content=content.replace("class=\\\"username_area","");
+
+                    content=content+source.substring(contentEnd,source.indexOf("</div>",contentEnd+3));
+                    contentEnd=source.indexOf("</div>",contentEnd+3);
+                }
+                tmp=contentEnd;
 
                 String curReplyLinks = "";
                 int tmpImg = 0;
@@ -488,7 +606,8 @@ public class Main {
 
                     int endOfLink = content.indexOf("\\\"",tmpImg);
                     String curlink = content.substring(tmpImg,endOfLink);
-                    if(curlink.contains("ADSK_Expert_Elite_Icon_S_Color_Blk.png"))
+                    if(curlink.contains("ADSK_Expert_Elite_Icon_S_Color_Blk.png") ||
+                       curlink.contains("autodesk_logo_signature.png"))
                         continue;
                     curReplyLinks = curReplyLinks+" http://forums.autodesk.com"+curlink;
                     tmpImg = endOfLink;
@@ -510,11 +629,17 @@ public class Main {
                 int tmpVideo = 0;
                 while( true )
                 {
-                    tmpImg = content.indexOf("<iframe",tmpVideo);
-                    if(tmpImg < 0)
+                    tmpVideo = content.indexOf("<iframe",tmpVideo)+3;
+                    if(tmpVideo < 3)
                         break;
 
-                    throw new IOException("Video Found but does not handle yet");
+                    tmpVideo = content.indexOf("src=\\\"", tmpVideo)+6;
+
+                    int endOfLink = content.indexOf("\\\"",tmpVideo);
+                    String curlink = content.substring(tmpVideo,endOfLink);
+
+                    curReplyLinks = curReplyLinks+" "+curlink;
+                    tmpImg = endOfLink;
                 }
 
                 //find attachments
@@ -523,6 +648,10 @@ public class Main {
                 tmpAttach = source.indexOf("<div class=\\\"Attachments",tmpAttach)+5;
                 //System.out.println(tmpAttach);
                 int nextReplyIndex = source.indexOf("<div class=\\\"lia-message-body-content", tmp);
+
+                //TODO: later on check if this works
+                if(nextReplyIndex==-1)
+                    nextReplyIndex = source.indexOf("<div class=\\\"lia-quilt-row lia-quilt-row-forum-message-footer", tmp);
                 if(tmpAttach>4 && tmpAttach<nextReplyIndex)
                 {
                     while(source.indexOf("<div class=\\\"attachment-",tmpAttach)<nextReplyIndex)
@@ -572,6 +701,7 @@ public class Main {
         }
         for(int i=0;i<postsURL.size();i++)
         {
+            System.out.println(i+" "+postsURL.get(i));
             parseMicrosoft(postsURL.get(i));
         }
     }
@@ -620,12 +750,13 @@ public class Main {
                     tmp = source.indexOf("id=\\\"threadTitle", tmp);
                     String topic = source.substring(source.indexOf(">", tmp) + 1, source.indexOf("</h1>", tmp));
                     topic=topic.replaceAll("\"","");
+                    topic=topic.replaceAll("&.*?;","");
                     bw.append("\""+topic+"\",\""+username+"\n"+date+"\",");
                     question = false;
                 }
 
                 //find content
-                if(skip && source.indexOf("class=\\\"messageAnswer",tmp)<source.indexOf("<div class=\\\"message\\\"",tmp))
+                if(skip && source.indexOf("class=\\\"messageAnswer",tmp)!=-1 &&source.indexOf("class=\\\"messageAnswer",tmp)<source.indexOf("<div class=\\\"message\\\"",tmp))
                 {
                     skip = false;
                     continue;
@@ -665,8 +796,8 @@ public class Main {
                 int tmpVideo = 0;
                 while( true )
                 {
-                    tmpImg = reply.indexOf("<iframe",tmpVideo);
-                    if(tmpImg < 0)
+                    tmpVideo = reply.indexOf("<iframe",tmpVideo);
+                    if(tmpVideo < 0)
                         break;
 
                     throw new IOException("Video Found but does not handle yet");
@@ -724,10 +855,12 @@ public class Main {
         };*/
 
         String url = "https://productforums.google.com/forum/#!category-topic/chromebook-central/uP85PbK9Rt4";
+        url = "http://forums.autodesk.com/t5/forums/searchpage/tab/message?filter=labels&q=how+to";
+        //parseAutoDesk("http://forums.autodesk.com/t5/Installation-Licensing/Failed-Installation-Error-1603-How-do-I-fix-it/m-p/5066122/highlight/true#M87838");
         //String url = "http://answers.microsoft.com/en-us/bing/forum/bing_gettingstarted-bing_social/i-dont-want-bing-connected-to-facebook-want-to-use/a5ac348b-9480-4b4d-855a-85d32d96919d";
         //String content=gettingHTMLSOURCE(url);
         //System.out.println(content);
-
+        parseAutoDeskLinks();
         //parseMicrosoftLinks(url);
         /*for (int i=0;i<autoDeskUrl.length;i++)
         {
@@ -737,15 +870,27 @@ public class Main {
         //parseAutoDesk(url);
 
         //parseGoogleLinks(url);
-        //parseAdobe("https://forums.adobe.com/message/5541525#5541525");
 
-        //parseGoogleLinks("https://productforums.google.com/forum/#!categories/docs");
-        //parseAdobe("https://forums.adobe.com/message/4721586#4721586");
-        parseGoogle(url);
+        /*parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How+to%22+%7C%7C+%22How+do%22&x=0&y=0&CurrentScope.ForumName=&CurrentScope.Filter=&ContentTypeScope=");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=2");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=3");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=4");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=5");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=6");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=7");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=8");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=9");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22%20%7C%7C%20%22How%20do%22&page=10");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How+to%22&x=0&y=0&CurrentScope.ForumName=&CurrentScope.Filter=&ContentTypeScope=");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22&page=2");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20to%22&page=3");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How+do%22&x=0&y=0&CurrentScope.ForumName=&CurrentScope.Filter=&ContentTypeScope=");
+        parseMicrosoftLinks("http://answers.microsoft.com/en-us/search/search?SearchTerm=%22How%20do%22&page=2");*/
+        //parseGoogle("https://productforums.google.com/forum/#!category-topic/chromebook-central/kBbnNk138P8");
 
 		//if(forum.compareTo("Adobe")==0)
 		//{
-		//	parseAdobeLinks(content);
+		//	parseAdobeLinks(url);
 		//}
         /*parseAdobe("https://forums.adobe.com/thread/1491903");
         System.out.println("Done");*/
